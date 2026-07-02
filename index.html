@@ -5,25 +5,87 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Image Measure · 图像测量</title>
 <style>
+:root {
+  --bg: #f5f5f7;
+  --bg-elevated: rgba(255,255,255,0.85);
+  --bg-sidebar: rgba(255,255,255,0.92);
+  --bg-button: white;
+  --bg-button-hover: #f5f5f7;
+  --bg-button-active: #e8e8ed;
+  --bg-tag: #f5f5f7;
+  --bg-stage: white;
+  --text: #1d1d1f;
+  --text-subtle: #6e6e73;
+  --text-muted: #c7c7cc;
+  --border: rgba(0,0,0,0.1);
+  --border-strong: #c7c7cc;
+  --viewport-bg: #e8e8ed;
+  --viewport-check: #d8d8dd;
+  --drop-bg: rgba(255,255,255,0.6);
+  --drop-border: rgba(0,0,0,0.15);
+  --shadow-image: 0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.05);
+  --color-measure: #ff3b30;
+  --color-measure-fill: rgba(255,59,48,0.15);
+  --color-draft: #ff9500;
+  --color-draft-fill: rgba(255,149,0,0.15);
+  --color-highlight: #007aff;
+  --color-highlight-fill: rgba(0,122,255,0.2);
+  --color-accent: #007aff;
+  --color-success: #34c759;
+  --label-stroke: white;
+}
+:root[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --bg-elevated: rgba(44,44,46,0.85);
+  --bg-sidebar: rgba(44,44,46,0.92);
+  --bg-button: #2c2c2e;
+  --bg-button-hover: #3a3a3c;
+  --bg-button-active: #48484a;
+  --bg-tag: #2c2c2e;
+  --bg-stage: #1c1c1e;
+  --text: #f5f5f7;
+  --text-subtle: #98989d;
+  --text-muted: #48484a;
+  --border: rgba(255,255,255,0.1);
+  --border-strong: #48484a;
+  --viewport-bg: #1c1c1e;
+  --viewport-check: #2c2c2e;
+  --drop-bg: rgba(44,44,46,0.6);
+  --drop-border: rgba(255,255,255,0.15);
+  --shadow-image: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+  --color-measure: #ff453a;
+  --color-measure-fill: rgba(255,69,58,0.18);
+  --color-draft: #ff9f0a;
+  --color-draft-fill: rgba(255,159,10,0.18);
+  --color-highlight: #0a84ff;
+  --color-highlight-fill: rgba(10,132,255,0.22);
+  --color-accent: #0a84ff;
+  --color-success: #30d158;
+  --label-stroke: white;
+}
+
+[hidden] { display: none !important; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: var(--bg);
+  color: var(--text);
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
 }
 
 /* ===== Toolbar ===== */
 .toolbar {
-  background: rgba(255,255,255,0.85);
+  background: var(--bg-elevated);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 1px solid rgba(0,0,0,0.1);
+  border-bottom: 1px solid var(--border);
   padding: 10px 16px;
   display: flex;
   align-items: center;
@@ -34,23 +96,23 @@ body {
 .toolbar button, .toolbar select {
   font-size: 13px;
   padding: 5px 11px;
-  border: 1px solid rgba(0,0,0,0.1);
-  background: white;
+  border: 1px solid var(--border);
+  background: var(--bg-button);
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
-  color: #1d1d1f;
+  color: var(--text);
   transition: background 0.1s;
 }
-.toolbar button:hover:not(:disabled) { background: #f5f5f7; }
-.toolbar button:active:not(:disabled) { background: #e8e8ed; }
+.toolbar button:hover:not(:disabled) { background: var(--bg-button-hover); }
+.toolbar button:active:not(:disabled) { background: var(--bg-button-active); }
 .toolbar button:disabled { opacity: 0.4; cursor: default; }
-.toolbar button.active { background: #007aff; color: white; border-color: #007aff; }
-.tool-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6e6e73; }
+.toolbar button.active { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+.tool-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-subtle); }
 .status {
   margin-left: auto;
   font-size: 12px;
-  color: #6e6e73;
+  color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
@@ -58,12 +120,12 @@ body {
 .viewport {
   position: relative;
   overflow: hidden;
-  background-color: #e8e8ed;
+  background-color: var(--viewport-bg);
   background-image:
-    linear-gradient(45deg, #d8d8dd 25%, transparent 25%),
-    linear-gradient(-45deg, #d8d8dd 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #d8d8dd 75%),
-    linear-gradient(-45deg, transparent 75%, #d8d8dd 75%);
+    linear-gradient(45deg, var(--viewport-check) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--viewport-check) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--viewport-check) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--viewport-check) 75%);
   background-size: 20px 20px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
@@ -74,15 +136,15 @@ body {
   content: '释放以加载图片';
   position: absolute;
   inset: 16px;
-  border: 3px dashed #007aff;
+  border: 3px dashed var(--color-accent);
   border-radius: 16px;
-  background: rgba(0,122,255,0.08);
+  background: rgba(10,132,255,0.08);
   pointer-events: none;
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #007aff;
+  color: var(--color-accent);
   font-size: 16px;
   font-weight: 500;
 }
@@ -90,15 +152,15 @@ body {
 .drop-zone {
   position: absolute;
   inset: 16px;
-  border: 3px dashed rgba(0,0,0,0.15);
+  border: 3px dashed var(--drop-border);
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 8px;
-  background: rgba(255,255,255,0.6);
-  color: #6e6e73;
+  background: var(--drop-bg);
+  color: var(--text-subtle);
   font-size: 15px;
   pointer-events: none;
   z-index: 10;
@@ -109,8 +171,8 @@ body {
   position: absolute;
   left: 0; top: 0;
   transform-origin: 0 0;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.05);
-  background: white;
+  box-shadow: var(--shadow-image);
+  background: var(--bg-stage);
 }
 .image-stage img {
   display: block;
@@ -128,7 +190,7 @@ body {
 
 /* ===== SVG measurement styles ===== */
 .measure-line, .draft-line {
-  stroke: #ff3b30;
+  stroke: var(--color-measure);
   stroke-width: 2;
   fill: none;
   vector-effect: non-scaling-stroke;
@@ -137,60 +199,60 @@ body {
 .draft-line { stroke-dasharray: 5 4; opacity: 0.75; }
 
 .measure-dot, .draft-dot {
-  fill: #ff3b30;
+  fill: var(--color-measure);
   vector-effect: non-scaling-stroke;
-  stroke: white;
+  stroke: var(--label-stroke);
   stroke-width: 2;
 }
-.draft-dot { fill: #ff9500; }
+.draft-dot { fill: var(--color-draft); }
 
 .measure-arc {
-  stroke: #ff3b30;
+  stroke: var(--color-measure);
   stroke-width: 1.5;
   fill: none;
   vector-effect: non-scaling-stroke;
 }
 
 .measure-polygon {
-  fill: rgba(255,59,48,0.15);
-  stroke: #ff3b30;
+  fill: var(--color-measure-fill);
+  stroke: var(--color-measure);
   stroke-width: 2;
   stroke-dasharray: 6 4;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
 }
 .draft-polygon {
-  fill: rgba(255,149,0,0.15);
-  stroke: #ff9500;
+  fill: var(--color-draft-fill);
+  stroke: var(--color-draft);
   stroke-width: 2;
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
 }
 
 .measure-label {
-  fill: #ff3b30;
+  fill: var(--color-measure);
   font-size: 16px;
   font-weight: 600;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   paint-order: stroke;
-  stroke: white;
+  stroke: var(--label-stroke);
   stroke-width: 4;
   stroke-linejoin: round;
   user-select: none;
 }
 
-.measurement.highlight .measure-line { stroke: #007aff; stroke-width: 3; }
-.measurement.highlight .measure-dot { fill: #007aff; }
-.measurement.highlight .measure-arc { stroke: #007aff; stroke-width: 2; }
-.measurement.highlight .measure-polygon { fill: rgba(0,122,255,0.2); stroke: #007aff; }
-.measurement.highlight .measure-label { fill: #007aff; }
+.measurement.highlight .measure-line { stroke: var(--color-highlight); stroke-width: 3; }
+.measurement.highlight .measure-dot { fill: var(--color-highlight); }
+.measurement.highlight .measure-arc { stroke: var(--color-highlight); stroke-width: 2; }
+.measurement.highlight .measure-polygon { fill: var(--color-highlight-fill); stroke: var(--color-highlight); }
+.measurement.highlight .measure-label { fill: var(--color-highlight); }
 
 /* ===== Sidebar ===== */
 .sidebar {
-  background: rgba(255,255,255,0.92);
+  background: var(--bg-sidebar);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-top: 1px solid rgba(0,0,0,0.1);
+  border-top: 1px solid var(--border);
   padding: 10px 16px;
   max-height: 200px;
   overflow-y: auto;
@@ -198,7 +260,7 @@ body {
 }
 .sidebar h3 {
   font-size: 11px;
-  color: #6e6e73;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-bottom: 8px;
@@ -207,7 +269,7 @@ body {
   align-items: center;
   gap: 12px;
 }
-.cal-info { color: #34c759; font-weight: 500; font-size: 11px; }
+.cal-info { color: var(--color-success); font-weight: 500; font-size: 11px; }
 #measurements-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .measurement-item {
   display: flex;
@@ -217,16 +279,16 @@ body {
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
-  background: white;
-  border: 1px solid rgba(0,0,0,0.08);
+  background: var(--bg-button);
+  border: 1px solid var(--border);
 }
-.measurement-item:hover { border-color: #c7c7cc; }
-.measurement-item .num { color: #6e6e73; font-variant-numeric: tabular-nums; min-width: 28px; }
+.measurement-item:hover { border-color: var(--border-strong); }
+.measurement-item .num { color: var(--text-subtle); font-variant-numeric: tabular-nums; min-width: 28px; }
 .measurement-item .type {
-  color: #6e6e73;
+  color: var(--text-subtle);
   font-size: 11px;
   padding: 2px 7px;
-  background: #f5f5f7;
+  background: var(--bg-tag);
   border-radius: 3px;
 }
 .measurement-item .value { font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -234,14 +296,14 @@ body {
   margin-left: auto;
   background: none;
   border: none;
-  color: #c7c7cc;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 18px;
   padding: 0 6px;
   line-height: 1;
 }
-.measurement-item .del:hover { color: #ff3b30; }
-.empty-list { color: #c7c7cc; font-size: 12px; padding: 8px 0; text-align: center; }
+.measurement-item .del:hover { color: var(--color-measure); }
+.empty-list { color: var(--text-muted); font-size: 12px; padding: 8px 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -268,6 +330,7 @@ body {
   </div>
   <button id="btn-calibrate" title="用已知真实长度的物体标定（如信用卡 8.56 cm）">📏 标定</button>
   <button id="btn-clear-all" title="清空所有测量">🗑 清空</button>
+  <button id="btn-theme" title="切换主题">🌙</button>
   <span class="status" id="status">未加载图片</span>
 </header>
 
@@ -838,6 +901,29 @@ body {
       renderAll();
     }
   };
+
+  // ===== Theme (light/dark) =====
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    $('btn-theme').textContent = theme === 'dark' ? '☀️' : '🌙';
+    $('btn-theme').title = theme === 'dark' ? '切换到浅色模式' : '切换到深色模式';
+  }
+
+  function initTheme() {
+    const saved = localStorage.getItem('image-measure-theme');
+    const theme = saved === 'light' || saved === 'dark'
+      ? saved
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(theme);
+  }
+
+  $('btn-theme').onclick = () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem('image-measure-theme', next);
+  };
+
+  initTheme();
 
   // ===== Resize: re-fit if image is small relative to viewport =====
   let resizeTimer = null;
