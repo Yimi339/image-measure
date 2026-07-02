@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Measure · 图像测量</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Toolbar ===== */
+.toolbar {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+  flex-wrap: wrap;
+}
+.toolbar button, .toolbar select {
+  font-size: 13px;
+  padding: 5px 11px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  color: #1d1d1f;
+  transition: background 0.1s;
+}
+.toolbar button:hover:not(:disabled) { background: #f5f5f7; }
+.toolbar button:active:not(:disabled) { background: #e8e8ed; }
+.toolbar button:disabled { opacity: 0.4; cursor: default; }
+.toolbar button.active { background: #007aff; color: white; border-color: #007aff; }
+.tool-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6e6e73; }
+.status {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6e6e73;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Viewport ===== */
+.viewport {
+  position: relative;
+  overflow: hidden;
+  background-color: #e8e8ed;
+  background-image:
+    linear-gradient(45deg, #d8d8dd 25%, transparent 25%),
+    linear-gradient(-45deg, #d8d8dd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d8d8dd 75%),
+    linear-gradient(-45deg, transparent 75%, #d8d8dd 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+.viewport.space-held { cursor: grab; }
+.viewport.space-held.panning { cursor: grabbing; }
+.viewport.measuring { cursor: crosshair; }
+.viewport.dragging::after {
+  content: '释放以加载图片';
+  position: absolute;
+  inset: 16px;
+  border: 3px dashed #007aff;
+  border-radius: 16px;
+  background: rgba(0,122,255,0.08);
+  pointer-events: none;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #007aff;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.drop-zone {
+  position: absolute;
+  inset: 16px;
+  border: 3px dashed rgba(0,0,0,0.15);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255,255,255,0.6);
+  color: #6e6e73;
+  font-size: 15px;
+  pointer-events: none;
+  z-index: 10;
+}
+.drop-zone small { font-size: 12px; opacity: 0.7; }
+
+.image-stage {
+  position: absolute;
+  left: 0; top: 0;
+  transform-origin: 0 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.05);
+  background: white;
+}
+.image-stage img {
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.image-stage svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* ===== SVG measurement styles ===== */
+.measure-line, .draft-line {
+  stroke: #ff3b30;
+  stroke-width: 2;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+.draft-line { stroke-dasharray: 5 4; opacity: 0.75; }
+
+.measure-dot, .draft-dot {
+  fill: #ff3b30;
+  vector-effect: non-scaling-stroke;
+  stroke: white;
+  stroke-width: 2;
+}
+.draft-dot { fill: #ff9500; }
+
+.measure-arc {
+  stroke: #ff3b30;
+  stroke-width: 1.5;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.measure-polygon {
+  fill: rgba(255,59,48,0.15);
+  stroke: #ff3b30;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.draft-polygon {
+  fill: rgba(255,149,0,0.15);
+  stroke: #ff9500;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.measure-label {
+  fill: #ff3b30;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  user-select: none;
+}
+
+.measurement.highlight .measure-line { stroke: #007aff; stroke-width: 3; }
+.measurement.highlight .measure-dot { fill: #007aff; }
+.measurement.highlight .measure-arc { stroke: #007aff; stroke-width: 2; }
+.measurement.highlight .measure-polygon { fill: rgba(0,122,255,0.2); stroke: #007aff; }
+.measurement.highlight .measure-label { fill: #007aff; }
+
+/* ===== Sidebar ===== */
+.sidebar {
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding: 10px 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  user-select: none;
+}
+.sidebar h3 {
+  font-size: 11px;
+  color: #6e6e73;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cal-info { color: #34c759; font-weight: 500; font-size: 11px; }
+#measurements-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.measurement-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.measurement-item:hover { border-color: #c7c7cc; }
+.measurement-item .num { color: #6e6e73; font-variant-numeric: tabular-nums; min-width: 28px; }
+.measurement-item .type {
+  color: #6e6e73;
+  font-size: 11px;
+  padding: 2px 7px;
+  background: #f5f5f7;
+  border-radius: 3px;
+}
+.measurement-item .value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.measurement-item .del {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #c7c7cc;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 6px;
+  line-height: 1;
+}
+.measurement-item .del:hover { color: #ff3b30; }
+.empty-list { color: #c7c7cc; font-size: 12px; padding: 8px 0; text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="toolbar">
+  <button id="btn-open" title="打开图片（也可直接拖拽到窗口）">📁 打开</button>
+  <button id="btn-fit" title="适配窗口" disabled>⊡ 适配</button>
+  <div class="tool-group">
+    <label>模式</label>
+    <select id="mode-select">
+      <option value="distance">距离</option>
+      <option value="angle">角度</option>
+      <option value="area">面积</option>
+    </select>
+  </div>
+  <div class="tool-group">
+    <label>单位</label>
+    <select id="unit-select">
+      <option value="px">像素</option>
+      <option value="mm">毫米</option>
+      <option value="cm">厘米</option>
+      <option value="inch">英寸</option>
+    </select>
+  </div>
+  <button id="btn-calibrate" title="用已知真实长度的物体标定（如信用卡 8.56 cm）">📏 标定</button>
+  <button id="btn-clear-all" title="清空所有测量">🗑 清空</button>
+  <span class="status" id="status">未加载图片</span>
+</header>
+
+<main class="viewport" id="viewport">
+  <div class="drop-zone" id="drop-zone">
+    <div>📥 拖拽图片到此处</div>
+    <small>支持 PNG · JPG · WebP · GIF · 也可点击"打开"或直接 ⌘V 粘贴截图</small>
+  </div>
+  <div class="image-stage" id="image-stage" hidden>
+    <img id="image" alt="" />
+    <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+</main>
+
+<aside class="sidebar">
+  <h3>
+    测量列表
+    <span class="cal-info" id="cal-info"></span>
+  </h3>
+  <ul id="measurements-list"></ul>
+</aside>
+
+<input type="file" id="file-input" accept="image/*" hidden />
+
+<script>
+(() => {
+  'use strict';
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // ===== State =====
+  const state = {
+    image: null,
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    mode: 'distance',
+    prevMode: 'distance',
+    calibration: null,
+    unit: 'px',
+    measurements: [],
+    draft: null,
+    nextId: 1,
+    isPanning: false,
+    spaceHeld: false,
+  };
+
+  // ===== DOM =====
+  const $ = id => document.getElementById(id);
+  const img = $('image');
+  const overlay = $('overlay');
+  const stage = $('image-stage');
+  const viewport = $('viewport');
+  const dropZone = $('drop-zone');
+  const modeSelect = $('mode-select');
+  const unitSelect = $('unit-select');
+  const listEl = $('measurements-list');
+  const statusEl = $('status');
+  const calInfoEl = $('cal-info');
+  const fileInput = $('file-input');
+  const btnFit = $('btn-fit');
+  const btnCalibrate = $('btn-calibrate');
+
+  // ===== Image loading =====
+  $('btn-open').onclick = () => fileInput.click();
+  fileInput.onchange = e => loadFile(e.target.files[0]);
+
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+    if (state.image && state.image.src.startsWith('blob:')) {
+      URL.revokeObjectURL(state.image.src);
+    }
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      state.image = img;
+      state.measurements = [];
+      state.draft = null;
+      state.calibration = null;
+      overlay.setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+      overlay.setAttribute('width', img.naturalWidth);
+      overlay.setAttribute('height', img.naturalHeight);
+      stage.hidden = false;
+      dropZone.hidden = true;
+      btnFit.disabled = false;
+      fitImage();
+      renderAll();
+    };
+    img.onerror = () => alert('图片加载失败');
+    img.src = url;
+  }
+
+  // Drag-drop on viewport
+  viewport.addEventListener('dragover', e => {
+    e.preventDefault();
+    viewport.classList.add('dragging');
+  });
+  viewport.addEventListener('dragleave', e => {
+    if (!e.relatedTarget || !viewport.contains(e.relatedTarget)) {
+      viewport.classList.remove('dragging');
+    }
+  });
+  viewport.addEventListener('drop', e => {
+    e.preventDefault();
+    viewport.classList.remove('dragging');
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  // Paste from clipboard (e.g. screenshot)
+  window.addEventListener('paste', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) { loadFile(file); e.preventDefault(); break; }
+      }
+    }
+  });
+
+  // ===== Fit & zoom =====
+  function fitImage() {
+    if (!state.image) return;
+    const vr = viewport.getBoundingClientRect();
+    const padding = 32;
+    const sx = (vr.width - padding * 2) / img.naturalWidth;
+    const sy = (vr.height - padding * 2) / img.naturalHeight;
+    const z = Math.min(sx, sy, 1);
+    state.zoom = z;
+    const w = img.naturalWidth * z;
+    const h = img.naturalHeight * z;
+    state.pan.x = (vr.width - w) / 2;
+    state.pan.y = (vr.height - h) / 2;
+    applyTransform();
+  }
+
+  btnFit.onclick = fitImage;
+
+  function applyTransform() {
+    stage.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+  }
+
+  // Wheel zoom (around cursor)
+  viewport.addEventListener('wheel', e => {
+    if (!state.image) return;
+    e.preventDefault();
+    const vr = viewport.getBoundingClientRect();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const newZoom = Math.max(0.05, Math.min(20, state.zoom * factor));
+    if (newZoom === state.zoom) return;
+    const cx = e.clientX - vr.left;
+    const cy = e.clientY - vr.top;
+    state.pan.x = cx - (cx - state.pan.x) * (newZoom / state.zoom);
+    state.pan.y = cy - (cy - state.pan.y) * (newZoom / state.zoom);
+    state.zoom = newZoom;
+    applyTransform();
+    updateStatus();
+  }, { passive: false });
+
+  // ===== Pan: space + drag =====
+  let panStart = null;
+
+  viewport.addEventListener('mousedown', e => {
+    if (state.spaceHeld && state.image) {
+      state.isPanning = true;
+      panStart = { x: e.clientX, y: e.clientY, pan: { ...state.pan } };
+      viewport.classList.add('panning');
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!state.isPanning) return;
+    state.pan.x = panStart.pan.x + (e.clientX - panStart.x);
+    state.pan.y = panStart.pan.y + (e.clientY - panStart.y);
+    applyTransform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (state.isPanning) {
+      state.isPanning = false;
+      viewport.classList.remove('panning');
+    }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space' && !state.spaceHeld) {
+      state.spaceHeld = true;
+      viewport.classList.add('space-held');
+      e.preventDefault();
+    }
+    if (e.key === 'Escape') {
+      if (state.mode === 'calibrate') {
+        state.mode = state.prevMode;
+        modeSelect.value = state.mode;
+      }
+      state.draft = null;
+      renderAll();
+    }
+  });
+
+  window.addEventListener('keyup', e => {
+    if (e.code === 'Space') {
+      state.spaceHeld = false;
+      viewport.classList.remove('space-held');
+    }
+  });
+
+  // ===== Click to add point =====
+  stage.addEventListener('click', e => {
+    if (!state.image || state.spaceHeld) return;
+    const pt = screenToImage(e.clientX, e.clientY);
+    handlePoint(pt);
+  });
+
+  function screenToImage(sx, sy) {
+    const rect = stage.getBoundingClientRect();
+    return {
+      x: (sx - rect.left) / state.zoom,
+      y: (sy - rect.top) / state.zoom,
+    };
+  }
+
+  function handlePoint(pt) {
+    // Calibrate
+    if (state.mode === 'calibrate') {
+      if (!state.draft) {
+        state.draft = { type: 'calibrate', points: [pt] };
+      } else {
+        const px = Math.hypot(pt.x - state.draft.points[0].x, pt.y - state.draft.points[0].y);
+        const input = prompt(`两点像素距离 = ${px.toFixed(2)} px\n\n输入对应的真实长度（厘米）:`, '8.56');
+        const cm = parseFloat(input);
+        if (!isNaN(cm) && cm > 0) {
+          state.calibration = px / cm;
+          state.unit = 'cm';
+          unitSelect.value = 'cm';
+        } else if (input !== null) {
+          alert('标定失败：长度必须为正数');
+        }
+        state.mode = state.prevMode;
+        modeSelect.value = state.mode;
+        state.draft = null;
+      }
+      renderAll();
+      return;
+    }
+
+    // Distance
+    if (state.mode === 'distance') {
+      if (!state.draft) {
+        state.draft = { id: state.nextId++, type: 'distance', points: [pt] };
+      } else {
+        state.draft.points.push(pt);
+        state.measurements.push(state.draft);
+        state.draft = null;
+      }
+      renderAll();
+      return;
+    }
+
+    // Angle (3 points: P1, V, P2)
+    if (state.mode === 'angle') {
+      if (!state.draft) {
+        state.draft = { id: state.nextId++, type: 'angle', points: [pt] };
+      } else if (state.draft.points.length < 3) {
+        state.draft.points.push(pt);
+        if (state.draft.points.length === 3) {
+          state.measurements.push(state.draft);
+          state.draft = null;
+        }
+      }
+      renderAll();
+      return;
+    }
+
+    // Area
+    if (state.mode === 'area') {
+      if (!state.draft) {
+        state.draft = { id: state.nextId++, type: 'area', points: [pt] };
+      } else {
+        const first = state.draft.points[0];
+        const closeThresholdScreen = 12;
+        if (state.draft.points.length >= 3 &&
+            Math.hypot(pt.x - first.x, pt.y - first.y) * state.zoom < closeThresholdScreen) {
+          state.measurements.push(state.draft);
+          state.draft = null;
+        } else {
+          state.draft.points.push(pt);
+        }
+      }
+      renderAll();
+      return;
+    }
+  }
+
+  // ===== Math =====
+  function distance(p1, p2) {
+    return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  }
+
+  function angleDeg(p1, v, p2) {
+    const v1x = p1.x - v.x, v1y = p1.y - v.y;
+    const v2x = p2.x - v.x, v2y = p2.y - v.y;
+    const m1 = Math.hypot(v1x, v1y), m2 = Math.hypot(v2x, v2y);
+    if (m1 === 0 || m2 === 0) return 0;
+    const cos = (v1x * v2x + v1y * v2y) / (m1 * m2);
+    return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+  }
+
+  function areaPolygon(pts) {
+    if (pts.length < 3) return 0;
+    let sum = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      sum += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    return Math.abs(sum) / 2;
+  }
+
+  // ===== Unit conversion =====
+  function pxToUnit(px) {
+    if (state.unit === 'px') return { value: px, suffix: 'px' };
+    if (!state.calibration) return { value: px, suffix: 'px', uncalibrated: true };
+    const cm = px / state.calibration;
+    switch (state.unit) {
+      case 'mm':   return { value: cm * 10, suffix: 'mm' };
+      case 'cm':   return { value: cm,      suffix: 'cm' };
+      case 'inch': return { value: cm / 2.54, suffix: 'in' };
+    }
+    return { value: px, suffix: 'px' };
+  }
+
+  function px2ToUnit(px2) {
+    if (state.unit === 'px') return { value: px2, suffix: 'px²' };
+    if (!state.calibration) return { value: px2, suffix: 'px²', uncalibrated: true };
+    const cm2 = px2 / (state.calibration * state.calibration);
+    switch (state.unit) {
+      case 'mm':   return { value: cm2 * 100,        suffix: 'mm²' };
+      case 'cm':   return { value: cm2,              suffix: 'cm²' };
+      case 'inch': return { value: cm2 / (2.54*2.54), suffix: 'in²' };
+    }
+    return { value: px2, suffix: 'px²' };
+  }
+
+  function fmt(v) {
+    if (!v) return '—';
+    if (v.uncalibrated) return `${v.value.toFixed(1)} ${v.suffix}（未标定）`;
+    const decimals = (v.suffix === 'px' || v.suffix === 'px²') ? 1 : 2;
+    return `${v.value.toFixed(decimals)} ${v.suffix}`;
+  }
+
+  // ===== SVG render =====
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function renderAll() {
+    overlay.innerHTML = '';
+    state.measurements.forEach(m => overlay.appendChild(drawMeasurement(m)));
+    if (state.draft) overlay.appendChild(drawDraft(state.draft));
+    renderList();
+    updateStatus();
+  }
+
+  function drawMeasurement(m) {
+    const g = svgEl('g', { 'data-id': m.id, class: 'measurement' });
+
+    if (m.type === 'distance') {
+      const [a, b] = m.points;
+      g.appendChild(svgEl('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: 'measure-line' }));
+      g.appendChild(svgEl('circle', { cx: a.x, cy: a.y, r: 5, class: 'measure-dot' }));
+      g.appendChild(svgEl('circle', { cx: b.x, cy: b.y, r: 5, class: 'measure-dot' }));
+      const t = svgEl('text', {
+        x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 12,
+        class: 'measure-label', 'text-anchor': 'middle',
+      });
+      t.textContent = fmt(pxToUnit(distance(a, b)));
+      g.appendChild(t);
+    }
+    else if (m.type === 'angle') {
+      const [p1, v, p2] = m.points;
+      g.appendChild(svgEl('line', { x1: p1.x, y1: p1.y, x2: v.x, y2: v.y, class: 'measure-line' }));
+      g.appendChild(svgEl('line', { x1: v.x, y1: v.y, x2: p2.x, y2: p2.y, class: 'measure-line' }));
+      [p1, v, p2].forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'measure-dot' })));
+      const r = Math.max(20, Math.min(60, distance(v, p1) * 0.4, distance(v, p2) * 0.4));
+      const a1 = Math.atan2(p1.y - v.y, p1.x - v.x);
+      const a2 = Math.atan2(p2.y - v.y, p2.x - v.x);
+      let delta = a2 - a1;
+      while (delta >  Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
+      const sweepFlag = delta > 0 ? 1 : 0;
+      const x1 = v.x + r * Math.cos(a1), y1 = v.y + r * Math.sin(a1);
+      const x2 = v.x + r * Math.cos(a2), y2 = v.y + r * Math.sin(a2);
+      g.appendChild(svgEl('path', {
+        d: `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`,
+        class: 'measure-arc',
+      }));
+      const midA = a1 + delta / 2;
+      const t = svgEl('text', {
+        x: v.x + (r + 18) * Math.cos(midA),
+        y: v.y + (r + 18) * Math.sin(midA),
+        class: 'measure-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      });
+      t.textContent = `${angleDeg(p1, v, p2).toFixed(1)}°`;
+      g.appendChild(t);
+    }
+    else if (m.type === 'area') {
+      const pts = m.points;
+      const ptsStr = pts.map(p => `${p.x},${p.y}`).join(' ');
+      g.appendChild(svgEl('polygon', { points: ptsStr, class: 'measure-polygon' }));
+      pts.forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'measure-dot' })));
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      const t = svgEl('text', {
+        x: cx, y: cy,
+        class: 'measure-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      });
+      t.textContent = fmt(px2ToUnit(areaPolygon(pts)));
+      g.appendChild(t);
+    }
+
+    return g;
+  }
+
+  function drawDraft(d) {
+    const g = svgEl('g', { class: 'draft' });
+    if (d.type === 'distance') {
+      d.points.forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'draft-dot' })));
+    }
+    else if (d.type === 'angle') {
+      d.points.forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'draft-dot' })));
+      if (d.points.length === 2) {
+        const [a, b] = d.points;
+        g.appendChild(svgEl('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: 'draft-line' }));
+      }
+    }
+    else if (d.type === 'area') {
+      d.points.forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'draft-dot' })));
+      if (d.points.length >= 2) {
+        g.appendChild(svgEl('polyline', {
+          points: d.points.map(p => `${p.x},${p.y}`).join(' '),
+          class: 'draft-polygon',
+        }));
+      }
+    }
+    else if (d.type === 'calibrate') {
+      d.points.forEach(p => g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 5, class: 'draft-dot' })));
+    }
+    return g;
+  }
+
+  // ===== Render measurements list =====
+  function renderList() {
+    listEl.innerHTML = '';
+    if (state.measurements.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'empty-list';
+      empty.textContent = state.image ? '点击图像添加测量' : '请先加载图片';
+      listEl.appendChild(empty);
+      updateCalInfo();
+      return;
+    }
+    const typeLabel = { distance: '距离', angle: '角度', area: '面积' };
+    state.measurements.forEach((m, idx) => {
+      let mainText = '';
+      if (m.type === 'distance') mainText = fmt(pxToUnit(distance(m.points[0], m.points[1])));
+      else if (m.type === 'angle') mainText = `${angleDeg(m.points[0], m.points[1], m.points[2]).toFixed(1)}°`;
+      else if (m.type === 'area') mainText = fmt(px2ToUnit(areaPolygon(m.points)));
+
+      const li = document.createElement('li');
+      li.className = 'measurement-item';
+      li.innerHTML = `
+        <span class="num">#${idx + 1}</span>
+        <span class="type">${typeLabel[m.type]}</span>
+        <span class="value">${mainText}</span>
+        <button class="del" data-id="${m.id}" title="删除">×</button>
+      `;
+      li.onclick = (e) => {
+        if (e.target.classList.contains('del')) return;
+        highlight(m.id);
+      };
+      li.querySelector('.del').onclick = (e) => {
+        e.stopPropagation();
+        removeMeasurement(m.id);
+      };
+      listEl.appendChild(li);
+    });
+    updateCalInfo();
+  }
+
+  function removeMeasurement(id) {
+    state.measurements = state.measurements.filter(m => m.id !== id);
+    renderAll();
+  }
+
+  function highlight(id) {
+    const el = overlay.querySelector(`[data-id="${id}"]`);
+    if (!el) return;
+    el.classList.add('highlight');
+    setTimeout(() => el.classList.remove('highlight'), 1200);
+  }
+
+  function updateCalInfo() {
+    calInfoEl.textContent = state.calibration
+      ? `✓ 标定: ${state.calibration.toFixed(2)} px/cm`
+      : '';
+  }
+
+  function updateStatus() {
+    if (!state.image) {
+      statusEl.textContent = '未加载图片';
+      viewport.classList.remove('measuring');
+      return;
+    }
+    viewport.classList.add('measuring');
+    let hint = '';
+    if (state.mode === 'calibrate') {
+      hint = state.draft ? ' · 标定：点击终点' : ' · 标定：点击起点';
+    } else if (state.mode === 'distance') {
+      hint = state.draft ? ' · 距离：点击终点' : ' · 距离：点击起点';
+    } else if (state.mode === 'angle') {
+      const n = state.draft ? state.draft.points.length : 0;
+      const labels = ['起点 P1', '顶点 V', '终点 P2'];
+      hint = ` · 角度：点击${labels[n] || '?'}`;
+    } else if (state.mode === 'area') {
+      hint = state.draft
+        ? ` · 面积：已 ${state.draft.points.length} 个点 · 点击起点闭合或继续`
+        : ' · 面积：点击第一个点';
+    }
+    const z = (state.zoom * 100).toFixed(0);
+    statusEl.textContent = `${img.naturalWidth} × ${img.naturalHeight} px · ${z}%${hint}`;
+  }
+
+  // ===== Mode/Unit/Calibrate handlers =====
+  modeSelect.onchange = () => {
+    state.mode = modeSelect.value;
+    state.prevMode = state.mode;
+    state.draft = null;
+    renderAll();
+  };
+
+  unitSelect.onchange = () => {
+    state.unit = unitSelect.value;
+    renderAll();
+  };
+
+  btnCalibrate.onclick = () => {
+    state.prevMode = state.mode;
+    state.mode = 'calibrate';
+    state.draft = null;
+    btnCalibrate.classList.add('active');
+    renderAll();
+  };
+
+  $('btn-clear-all').onclick = () => {
+    if (state.measurements.length === 0) return;
+    if (confirm('清空所有测量？')) {
+      state.measurements = [];
+      state.draft = null;
+      renderAll();
+    }
+  };
+
+  // ===== Resize: re-fit if image is small relative to viewport =====
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (!state.image || state.zoom >= 1) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const vr = viewport.getBoundingClientRect();
+      const fitsW = img.naturalWidth * state.zoom <= vr.width;
+      const fitsH = img.naturalHeight * state.zoom <= vr.height;
+      if (!fitsW || !fitsH) fitImage();
+    }, 200);
+  });
+
+  // ===== Init =====
+  renderList();
+  updateStatus();
+})();
+</script>
+</body>
+</html>
