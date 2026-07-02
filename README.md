@@ -12,6 +12,7 @@ A lightweight single-file web tool for measuring **distances**, **angles**, and 
 - **Calibration** — set a known real-world reference (e.g. credit card 8.56 cm wide) to convert pixels to mm / cm / inch
 - **Zoom & Pan** — scroll wheel zooms around cursor; hold <kbd>Space</kbd> + drag to pan
 - **Drag & Drop** — drop an image onto the window, or paste a screenshot with <kbd>⌘V</kbd>
+- **Light / Dark mode** — auto-detects system preference; toggle with the 🌙 / ☀️ button (preference is remembered)
 - **Measurements list** — click any item to flash its overlay; <kbd>×</kbd> to delete
 
 ## Quick Start
